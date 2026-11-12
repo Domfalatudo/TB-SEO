@@ -1,0 +1,10 @@
+{
+  "description": "Portal de serviços públicos para cidadãos encontrarem e solicitarem serviços, acompanharem protocolos e agendarem atendimentos em um só lugar.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
