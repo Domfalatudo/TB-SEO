@@ -1,5 +1,10 @@
 {
+  "title": "Cidadania Digital",
   "description": "Portal de serviços públicos para cidadãos encontrarem e solicitarem serviços, acompanharem protocolos e agendarem atendimentos em um só lugar.",
+  "language": "pt-BR",
+  "icons": {
+    "icon": "/favicon.svg"
+  },
   "robots": {
     "index": false
   },

@@ -1,6 +1,8 @@
 import {
+  type Dispatch,
   FormEvent,
   ReactNode,
+  type SetStateAction,
   useEffect,
   useMemo,
   useRef,
@@ -86,7 +88,6 @@ type Service = {
   title: string
   category: string
   description: string
-  time: string
   online: boolean
   popular?: boolean
   icon: LucideIcon
@@ -105,12 +106,164 @@ type Proposal = {
 
 type CitizenNotification = {
   id: number
-  icon: LucideIcon
+  icon: "file" | "calendar" | "wallet" | "recommendation"
   title: string
   text: string
   time: string
   type: string
 }
+
+type CitizenProtocol = {
+  code: string
+  title: string
+  date: string
+  status: string
+  step: number
+}
+
+type CitizenAppointment = {
+  id: string
+  service: string
+  unit: string
+  date: string
+  time: string
+  reminder: boolean
+}
+
+type CitizenActivity = {
+  id: string
+  date: string
+  title: string
+  detail: string
+  icon: "file" | "calendar" | "heart" | "message" | "briefcase"
+}
+
+type CitizenMessage = {
+  id: string
+  date: string
+  text: string
+}
+
+type CitizenDocument = {
+  title: string
+  number: string
+  valid: string
+  icon: LucideIcon
+  color: string
+}
+
+function usePersistentState<T>(
+  key: string,
+  initialValue: T,
+  isValid: (value: unknown) => value is T,
+): [T, Dispatch<SetStateAction<T>>] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stored = window.localStorage.getItem(key)
+      if (stored === null) return initialValue
+      const parsed: unknown = JSON.parse(stored)
+      if (isValid(parsed)) return parsed
+      console.error(`Stored value for "${key}" has an invalid shape.`)
+    } catch (error) {
+      console.error(`Could not load "${key}" from local storage.`, error)
+    }
+    return initialValue
+  })
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.error(`Could not save "${key}" to local storage.`, error)
+    }
+  }, [key, value])
+
+  return [value, setValue]
+}
+
+function isArrayOf<T>(
+  value: unknown,
+  isItem: (item: unknown) => item is T,
+): value is T[] {
+  return Array.isArray(value) && value.every(isItem)
+}
+
+const isString = (value: unknown): value is string => typeof value === "string"
+const isNumber = (value: unknown): value is number => typeof value === "number"
+
+const isCitizenProtocol = (value: unknown): value is CitizenProtocol =>
+  typeof value === "object" &&
+  value !== null &&
+  "code" in value &&
+  isString(value.code) &&
+  "title" in value &&
+  isString(value.title) &&
+  "date" in value &&
+  isString(value.date) &&
+  "status" in value &&
+  isString(value.status) &&
+  "step" in value &&
+  isNumber(value.step)
+
+const isCitizenAppointment = (value: unknown): value is CitizenAppointment =>
+  typeof value === "object" &&
+  value !== null &&
+  "id" in value &&
+  isString(value.id) &&
+  "service" in value &&
+  isString(value.service) &&
+  "unit" in value &&
+  isString(value.unit) &&
+  "date" in value &&
+  isString(value.date) &&
+  "time" in value &&
+  isString(value.time) &&
+  "reminder" in value &&
+  typeof value.reminder === "boolean"
+
+const isCitizenNotification = (value: unknown): value is CitizenNotification =>
+  typeof value === "object" &&
+  value !== null &&
+  "id" in value &&
+  isNumber(value.id) &&
+  "icon" in value &&
+  ["file", "calendar", "wallet", "recommendation"].includes(
+    String(value.icon),
+  ) &&
+  "title" in value &&
+  isString(value.title) &&
+  "text" in value &&
+  isString(value.text) &&
+  "time" in value &&
+  isString(value.time) &&
+  "type" in value &&
+  isString(value.type)
+
+const isCitizenActivity = (value: unknown): value is CitizenActivity =>
+  typeof value === "object" &&
+  value !== null &&
+  "id" in value &&
+  isString(value.id) &&
+  "date" in value &&
+  isString(value.date) &&
+  "title" in value &&
+  isString(value.title) &&
+  "detail" in value &&
+  isString(value.detail) &&
+  "icon" in value &&
+  ["file", "calendar", "heart", "message", "briefcase"].includes(
+    String(value.icon),
+  )
+
+const isCitizenMessage = (value: unknown): value is CitizenMessage =>
+  typeof value === "object" &&
+  value !== null &&
+  "id" in value &&
+  isString(value.id) &&
+  "date" in value &&
+  isString(value.date) &&
+  "text" in value &&
+  isString(value.text)
 
 const categories = [
   { name: "Documentos", icon: FileBadge, color: "#002776" },
@@ -132,7 +285,7 @@ const portalAreas = [
     icon: WalletCards,
     color: "#002776",
     category: "Documentos",
-    highlight: "3 documentos disponíveis",
+    highlight: "Documentos digitais",
   },
   {
     name: "Benefícios sociais",
@@ -152,7 +305,7 @@ const portalAreas = [
     icon: BriefcaseBusiness,
     color: "#002776",
     category: "Trabalho",
-    highlight: "148 vagas abertas",
+    highlight: "Consulte vagas disponíveis",
   },
   {
     name: "Educação",
@@ -161,7 +314,7 @@ const portalAreas = [
     icon: GraduationCap,
     color: "#002776",
     category: "Educação",
-    highlight: "12 cursos gratuitos",
+    highlight: "Cursos e matrículas",
   },
   {
     name: "Saúde",
@@ -201,7 +354,7 @@ const portalAreas = [
     icon: Landmark,
     color: "#002776",
     category: "Atendimento",
-    highlight: "42 serviços locais",
+    highlight: "Atendimento municipal",
   },
 ]
 
@@ -212,7 +365,6 @@ const services: Service[] = [
     category: "Documentos",
     description:
       "Solicite a primeira ou segunda via da sua Carteira de Identidade Nacional.",
-    time: "15 min",
     online: true,
     popular: true,
     icon: FileBadge,
@@ -223,7 +375,6 @@ const services: Service[] = [
     category: "Saúde",
     description:
       "Acesse seu histórico de vacinas e emita o comprovante digital.",
-    time: "Imediato",
     online: true,
     popular: true,
     icon: Stethoscope,
@@ -233,7 +384,6 @@ const services: Service[] = [
     title: "Solicitar Seguro-Desemprego",
     category: "Trabalho",
     description: "Envie seu requerimento e acompanhe a análise do benefício.",
-    time: "20 min",
     online: true,
     popular: true,
     icon: BriefcaseBusiness,
@@ -243,7 +393,6 @@ const services: Service[] = [
     title: "Emitir Certificado Escolar",
     category: "Educação",
     description: "Peça certificados e declarações da rede pública de ensino.",
-    time: "10 min",
     online: true,
     popular: true,
     icon: GraduationCap,
@@ -253,7 +402,6 @@ const services: Service[] = [
     title: "Cadastrar Bilhete de Transporte",
     category: "Transporte",
     description: "Solicite ou atualize seu cartão de transporte público.",
-    time: "15 min",
     online: true,
     icon: Bus,
   },
@@ -263,7 +411,6 @@ const services: Service[] = [
     category: "Assistência Social",
     description:
       "Consulte os critérios e faça seu pré-cadastro em programas de assistência.",
-    time: "25 min",
     online: true,
     icon: Users,
   },
@@ -272,7 +419,6 @@ const services: Service[] = [
     title: "Abrir Microempresa",
     category: "Empreendedorismo",
     description: "Acesse orientações para formalizar seu pequeno negócio.",
-    time: "30 min",
     online: true,
     icon: Building2,
   },
@@ -281,7 +427,6 @@ const services: Service[] = [
     title: "Agendar Atendimento Presencial",
     category: "Atendimento",
     description: "Escolha unidade, data e horário para seu atendimento.",
-    time: "5 min",
     online: false,
     icon: CalendarDays,
   },
@@ -291,7 +436,6 @@ const services: Service[] = [
     category: "Transporte",
     description:
       "Solicite o benefício de transporte para estudantes matriculados.",
-    time: "15 min",
     online: true,
     icon: Bus,
   },
@@ -301,7 +445,6 @@ const services: Service[] = [
     category: "Assistência Social",
     description:
       "Veja programas sociais compatíveis com o seu perfil demonstrativo.",
-    time: "Imediato",
     online: true,
     icon: Users,
   },
@@ -311,7 +454,6 @@ const services: Service[] = [
     category: "Trabalho",
     description:
       "Encontre oportunidades por área, localidade e modalidade de trabalho.",
-    time: "Imediato",
     online: true,
     icon: BriefcaseBusiness,
   },
@@ -320,7 +462,6 @@ const services: Service[] = [
     title: "Inscrição em Cursos Gratuitos",
     category: "Educação",
     description: "Consulte cursos presenciais e online com inscrições abertas.",
-    time: "10 min",
     online: true,
     icon: BookOpen,
   },
@@ -329,7 +470,6 @@ const services: Service[] = [
     title: "Agendar Consulta na Rede Pública",
     category: "Saúde",
     description: "Consulte unidades e solicite atendimento básico de saúde.",
-    time: "10 min",
     online: true,
     icon: CalendarCheck,
   },
@@ -339,7 +479,6 @@ const services: Service[] = [
     category: "Atendimento",
     description:
       "Informe um ponto de iluminação pública que precisa de manutenção.",
-    time: "8 min",
     online: true,
     icon: Landmark,
   },
@@ -348,7 +487,6 @@ const services: Service[] = [
     title: "Orientação sobre Direitos do Consumidor",
     category: "Atendimento",
     description: "Saiba como registrar uma reclamação e buscar uma solução.",
-    time: "Imediato",
     online: true,
     icon: ShieldCheck,
   },
@@ -357,10 +495,24 @@ const services: Service[] = [
     title: "Emitir Certidão de Nascimento Digital",
     category: "Documentos",
     description: "Solicite uma via digital demonstrativa da sua certidão.",
-    time: "15 min",
     online: true,
     icon: FileBadge,
   },
+]
+
+const appointmentUnits = [
+  "Posto Central de Atendimento",
+  "Unidade Cidadania Norte",
+  "Unidade Cidadania Sul",
+]
+
+const appointmentTimeSlots = [
+  "08:30",
+  "09:00",
+  "10:30",
+  "14:00",
+  "15:30",
+  "16:00",
 ]
 
 const proposalList: Proposal[] = [
@@ -370,9 +522,9 @@ const proposalList: Proposal[] = [
     category: "Atendimento",
     summary:
       "Ampliação de pontos de atendimento para reduzir filas e melhorar o acesso à população.",
-    deadline: "Prazo: 2026",
-    status: "Em execução",
-    amount: "R$ 8,4 milhões",
+    deadline: "Prazo não informado",
+    status: "Informação ilustrativa",
+    amount: "Valor não informado",
     icon: Landmark,
   },
   {
@@ -381,9 +533,9 @@ const proposalList: Proposal[] = [
     category: "Tecnologia",
     summary:
       "Investimento em canais digitais para facilitar o acesso a serviços e documentos.",
-    deadline: "Prazo: 2026/2027",
-    status: "Em execução",
-    amount: "R$ 12,1 milhões",
+    deadline: "Prazo não informado",
+    status: "Informação ilustrativa",
+    amount: "Valor não informado",
     icon: MonitorCog,
   },
   {
@@ -392,96 +544,55 @@ const proposalList: Proposal[] = [
     category: "Educação",
     summary:
       "Ações para qualificação de jovens e adultos com cursos gratuitos e certificação.",
-    deadline: "Prazo: 2026",
-    status: "Em análise",
-    amount: "R$ 5,7 milhões",
+    deadline: "Prazo não informado",
+    status: "Informação ilustrativa",
+    amount: "Valor não informado",
     icon: GraduationCap,
   },
 ]
 
-const initialProtocols = [
-  {
-    code: "CD-2025-008271",
-    title: "Carteira de Identidade Nacional",
-    date: "18 jun 2025",
-    status: "Em análise",
-    step: 2,
-  },
-  {
-    code: "CD-2025-006492",
-    title: "Certificado Escolar",
-    date: "03 jun 2025",
-    status: "Concluído",
-    step: 3,
-  },
-  {
-    code: "CD-2025-004113",
-    title: "Atualização do Bilhete de Transporte",
-    date: "14 mai 2025",
-    status: "Aguardando documento",
-    step: 1,
-  },
-]
+const citizenDocuments: CitizenDocument[] = []
 
-const initialNotifications: CitizenNotification[] = [
-  {
-    id: 1,
-    icon: FileText,
-    title: "Sua solicitação avançou",
-    text: "O protocolo CD-2025-008271 está agora em análise.",
-    time: "Há 20 minutos",
-    type: "Solicitações",
-  },
-  {
-    id: 2,
-    icon: CalendarDays,
-    title: "Lembrete de atendimento",
-    text: "Seu atendimento está agendado para amanhã às 10:30.",
-    time: "Hoje, 09:15",
-    type: "Agenda",
-  },
-  {
-    id: 3,
-    icon: WalletCards,
-    title: "Documento disponível",
-    text: "Seu certificado escolar digital está pronto para consulta.",
-    time: "Ontem, 16:42",
-    type: "Documentos",
-  },
-  {
-    id: 4,
-    icon: Sparkles,
-    title: "Novo serviço recomendado",
-    text: "Encontramos um curso gratuito que pode interessar a você.",
-    time: "22 jun",
-    type: "Recomendações",
-  },
-]
-const notificationsClearedStorageKey = "portal-cidadania-notifications-cleared"
+const notificationIcons: Record<CitizenNotification["icon"], LucideIcon> = {
+  file: FileText,
+  calendar: CalendarDays,
+  wallet: WalletCards,
+  recommendation: Sparkles,
+}
 
-const citizenDocuments = [
-  {
-    title: "Carteira de Identidade Nacional",
-    number: "Final 4821",
-    valid: "Válida até 18/06/2035",
-    icon: FileBadge,
-    color: "blue",
-  },
-  {
-    title: "Cartão de Vacinação",
-    number: "Atualizado em 12/06/2025",
-    valid: "Vacinação em dia",
-    icon: Stethoscope,
-    color: "green",
-  },
-  {
-    title: "Certificado Escolar",
-    number: "Ensino Médio · 2022",
-    valid: "Documento verificado",
-    icon: GraduationCap,
-    color: "purple",
-  },
-]
+const activityIcons: Record<CitizenActivity["icon"], LucideIcon> = {
+  file: FileText,
+  calendar: CalendarDays,
+  heart: Heart,
+  message: MessageSquare,
+  briefcase: BriefcaseBusiness,
+}
+
+function formatDisplayDate(value: string) {
+  const date = new Date(
+    /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value,
+  )
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(date)
+}
+
+function formatDisplayDateTime(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(date)
+}
+
+function dateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
 
 type NavItem = {
   label: string
@@ -571,17 +682,43 @@ function Header({
   const [mobileOpen, setMobileOpen] = useState(false)
   const [accessOpen, setAccessOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const accountMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!profileOpen) return
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !accountMenuRef.current?.contains(event.target)
+      ) {
+        setProfileOpen(false)
+      }
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProfileOpen(false)
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsideClick)
+    document.addEventListener("keydown", closeOnEscape)
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick)
+      document.removeEventListener("keydown", closeOnEscape)
+    }
+  }, [profileOpen])
 
   const go = (target: Page) => {
     navigate(target)
     setMobileOpen(false)
+    setProfileOpen(false)
   }
 
   return (
     <>
       <div className="utility-bar">
         <div className="container utility-inner">
-          <span>Portal oficial de serviços ao cidadão</span>
+          <span>Demonstração de serviços ao cidadão</span>
           <div className="utility-actions">
             <button onClick={() => setAccessOpen(!accessOpen)}>
               <Accessibility size={15} /> Acessibilidade{" "}
@@ -707,18 +844,21 @@ function Header({
                       </button>
                     </div>
                     {notifications.length ? (
-                      notifications.slice(0, 3).map(({ id, icon: Icon, title, text }) => (
-                        <p key={id}>
-                          <span className="notice-icon">
-                            <Icon size={16} />
-                          </span>
-                          <span>
-                            <strong>{title}</strong>
-                            <br />
-                            {text}
-                          </span>
-                        </p>
-                      ))
+                      notifications.slice(0, 3).map((notification) => {
+                        const Icon = notificationIcons[notification.icon]
+                        return (
+                          <p key={notification.id}>
+                            <span className="notice-icon">
+                              <Icon size={16} />
+                            </span>
+                            <span>
+                              <strong>{notification.title}</strong>
+                              <br />
+                              {notification.text}
+                            </span>
+                          </p>
+                        )
+                      })
                     ) : (
                       <p>Nenhuma notificação por enquanto.</p>
                     )}
@@ -737,24 +877,42 @@ function Header({
             )}
             {loggedIn ? (
               <>
-                <button
-                  className="account-button"
-                  onClick={() => go("dashboard")}
-                >
-                  <span className="avatar">MC</span>
-                  <span className="account-copy">
-                    <small>Olá,</small>
-                    <strong>Marina</strong>
-                  </span>
-                  <ChevronDown size={16} />
-                </button>
-                <IconButton
-                  label="Sair da conta"
-                  className="desktop-logout"
-                  onClick={logout}
-                >
-                  <LogOut size={19} />
-                </IconButton>
+                <div className="account-menu-wrap" ref={accountMenuRef}>
+                  <button
+                    className="account-button"
+                    aria-expanded={profileOpen}
+                    aria-haspopup="menu"
+                    aria-controls="account-menu"
+                    onClick={() => setProfileOpen(!profileOpen)}
+                  >
+                    <span className="avatar">MC</span>
+                    <span className="account-copy">
+                      <small>Olá,</small>
+                      <strong>Marina</strong>
+                    </span>
+                    <ChevronDown size={16} />
+                  </button>
+                  {profileOpen && (
+                    <div className="account-menu" id="account-menu" role="menu">
+                      <button role="menuitem" onClick={() => go("dashboard")}>
+                        <User size={16} /> Minha área
+                      </button>
+                      <button role="menuitem" onClick={() => go("protocols")}>
+                        <FileText size={16} /> Meus protocolos
+                      </button>
+                      <button
+                        className="account-menu-logout"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileOpen(false)
+                          logout()
+                        }}
+                      >
+                        <LogOut size={16} /> Sair da conta
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <button
@@ -900,10 +1058,10 @@ function ServiceCard({
       <p>{service.description}</p>
       <div className="service-meta">
         <span>
-          <Clock3 size={15} /> {service.time}
+          <Clock3 size={15} /> Prazo não informado
         </span>
         <span className={service.online ? "online" : "presential"}>
-          {service.online ? "100% digital" : "Presencial"}
+          {service.online ? "Fluxo digital de demonstração" : "Presencial"}
         </span>
       </div>
       <button className="text-link stretched" onClick={() => onOpen(service)}>
@@ -938,12 +1096,12 @@ function HomePage({
         <div className="container hero-content">
           <div className="hero-copy">
             <span className="hero-badge">
-              <ShieldCheck size={16} /> Serviços públicos em um só lugar
+              <ShieldCheck size={16} /> Demonstração de serviços digitais
             </span>
             <h1>Mais facilidade para cuidar do que importa.</h1>
             <p>
-              Encontre serviços, acompanhe solicitações e resolva tudo de forma
-              simples, segura e digital.
+              Explore serviços e acompanhe os protocolos criados nesta
+              demonstração local.
             </p>
             <SearchBox
               value={search}
@@ -974,8 +1132,8 @@ function HomePage({
                   <CheckCircle2 size={18} />
                 </span>
                 <div>
-                  <strong>Solicitação enviada</strong>
-                  <small>Protocolo CD-2025-008271</small>
+                  <strong>Inicie um serviço</strong>
+                  <small>Seu protocolo aparecerá aqui</small>
                 </div>
               </div>
               <div className="progress-line">
@@ -984,22 +1142,22 @@ function HomePage({
                 <i />
               </div>
               <div className="visual-status">
-                <span>Etapa atual</span>
-                <strong>Em análise</strong>
+                <span>Área do cidadão</span>
+                <strong>Acompanhe seus protocolos</strong>
               </div>
             </div>
             <div className="visual-card floating top">
               <CalendarDays size={21} />
               <div>
-                <small>Próximo atendimento</small>
-                <strong>Amanhã, 10:30</strong>
+                <small>Agendamentos</small>
+                <strong>Acesse seu calendário</strong>
               </div>
             </div>
             <div className="visual-card floating bottom">
               <ShieldCheck size={21} />
               <div>
                 <small>Ambiente</small>
-                <strong>Seguro e protegido</strong>
+                <strong>Dados ficam no navegador</strong>
               </div>
             </div>
           </div>
@@ -1051,8 +1209,8 @@ function HomePage({
         <div className="container">
           <SectionHeading
             eyebrow="Acesso rápido"
-            title="Serviços mais procurados"
-            description="Os serviços mais utilizados pelos cidadãos."
+            title="Serviços em destaque"
+            description="Exemplos disponíveis no catálogo desta demonstração."
           />
           <div className="service-grid">
             {services
@@ -1073,11 +1231,11 @@ function HomePage({
       <section className="section">
         <div className="container trust-grid">
           <div className="trust-copy">
-            <span className="eyebrow">Simples, seguro e transparente</span>
-            <h2>Seu acesso aos serviços públicos, do seu jeito.</h2>
+            <span className="eyebrow">Recursos da demonstração</span>
+            <h2>Explore serviços e acompanhe seus registros locais.</h2>
             <p>
-              Uma experiência digital pensada para facilitar sua rotina e manter
-              você sempre informado.
+              Solicitações e preferências são armazenadas neste navegador; não
+              há conexão com sistemas governamentais.
             </p>
           </div>
           <div className="trust-items">
@@ -1086,8 +1244,8 @@ function HomePage({
                 <ShieldCheck />
               </span>
               <div>
-                <h3>Seus dados protegidos</h3>
-                <p>Ambiente seguro com boas práticas de privacidade.</p>
+                <h3>Dados locais</h3>
+                <p>Os registros ficam neste navegador. Não use dados pessoais reais.</p>
               </div>
             </div>
             <div>
@@ -1095,8 +1253,8 @@ function HomePage({
                 <Clock3 />
               </span>
               <div>
-                <h3>Disponível a qualquer hora</h3>
-                <p>Acesse os serviços digitais quando precisar.</p>
+                <h3>Recursos interativos</h3>
+                <p>Pesquise, salve e acompanhe os serviços do catálogo.</p>
               </div>
             </div>
             <div>
@@ -1104,8 +1262,8 @@ function HomePage({
                 <CheckCircle2 />
               </span>
               <div>
-                <h3>Acompanhe cada etapa</h3>
-                <p>Consulte atualizações de forma clara e simples.</p>
+                <h3>Contadores atualizados</h3>
+                <p>Os números da conta vêm dos registros locais criados.</p>
               </div>
             </div>
           </div>
@@ -1224,7 +1382,7 @@ function CatalogPage({
           <SearchBox
             value={search}
             setValue={setSearch}
-            onSearch={() => undefined}
+            onSearch={() => setSearch(search.trim())}
             compact
           />
         </div>
@@ -1319,7 +1477,7 @@ function ServicePage({
               <p>{service.description}</p>
               <div className="detail-tags">
                 <span>
-                  <Clock3 size={17} /> Tempo estimado: {service.time}
+                  <Clock3 size={17} /> Tempo estimado não informado
                 </span>
                 <span>
                   <CheckCircle2 size={17} />{" "}
@@ -1344,32 +1502,18 @@ function ServicePage({
           <section>
             <h2>Sobre este serviço</h2>
             <p>
-              Este serviço permite que você realize a solicitação de forma
-              segura e acompanhe todas as etapas pelo portal Cidadania Digital.
-              As informações fornecidas serão usadas exclusivamente para
-              analisar o seu pedido.
+              Este protótipo registra uma solicitação local e gera um protocolo
+              para demonstrar o acompanhamento. Não envia dados a um órgão
+              público nem realiza a emissão do serviço.
             </p>
           </section>
           <section>
-            <h2>Quem pode utilizar</h2>
+            <h2>Requisitos do serviço</h2>
             <p>
-              Qualquer cidadão brasileiro que possua CPF regular e os documentos
-              necessários para a solicitação.
+              Os requisitos reais dependem do órgão responsável e não estão
+              conectados nesta demonstração. Consulte a fonte oficial antes de
+              solicitar o serviço.
             </p>
-          </section>
-          <section>
-            <h2>O que você precisa</h2>
-            <ul className="document-list">
-              <li>
-                <Check size={17} /> Documento oficial com foto
-              </li>
-              <li>
-                <Check size={17} /> Número do CPF
-              </li>
-              <li>
-                <Check size={17} /> Comprovante de residência atualizado
-              </li>
-            </ul>
           </section>
           <section>
             <h2>Etapas do serviço</h2>
@@ -1377,22 +1521,22 @@ function ServicePage({
               <li>
                 <span>1</span>
                 <div>
-                  <strong>Preencha a solicitação</strong>
-                  <p>Informe seus dados e confira antes de enviar.</p>
+                  <strong>Crie o registro local</strong>
+                  <p>Crie um registro demonstrativo sem enviar dados pessoais.</p>
                 </div>
               </li>
               <li>
                 <span>2</span>
                 <div>
-                  <strong>Acompanhe a análise</strong>
-                  <p>Você receberá atualizações pelo portal.</p>
+                  <strong>Acompanhe o protocolo</strong>
+                  <p>Consulte o protocolo local criado para este serviço.</p>
                 </div>
               </li>
               <li>
                 <span>3</span>
                 <div>
-                  <strong>Receba o resultado</strong>
-                  <p>Acesse o documento ou orientação final.</p>
+                  <strong>Consulte o resultado oficial</strong>
+                  <p>O resultado real exige integração com o órgão responsável.</p>
                 </div>
               </li>
             </ol>
@@ -1400,7 +1544,7 @@ function ServicePage({
         </article>
         <aside className="start-card">
           <span className="secure-label">
-            <ShieldCheck size={18} /> Ambiente seguro
+            <ShieldCheck size={18} /> Modo demonstrativo
           </span>
           <h2>Pronto para começar?</h2>
           <p>Você precisará entrar na sua conta para iniciar a solicitação.</p>
@@ -1419,7 +1563,8 @@ function ServicePage({
             </button>
           )}
           <small>
-            Seus dados são protegidos conforme a legislação vigente.
+            Não informe dados pessoais reais. Este registro fica apenas neste
+            navegador.
           </small>
         </aside>
       </div>
@@ -1456,10 +1601,10 @@ function LoginPage({
   return (
     <main className="auth-page">
       <section className="auth-brand">
-        <Logo onClick={() => navigate("home")} />
+        <Logo onClick={() => navigate("login")} />
         <div className="auth-message">
           <span className="hero-badge">
-            <ShieldCheck size={16} /> Acesso protegido
+            <ShieldCheck size={16} /> Acesso demonstrativo
           </span>
           <h1>Sua cidadania, mais simples e mais próxima.</h1>
           <p>
@@ -1468,24 +1613,24 @@ function LoginPage({
           </p>
           <div className="auth-benefits">
             <span>
-              <CheckCircle2 /> Acesso seguro
+              <CheckCircle2 /> Conta demonstrativa
             </span>
             <span>
-              <Clock3 /> Disponível 24 horas
+              <Clock3 /> Acesse serviços online
             </span>
           </div>
         </div>
-        <small>Ambiente demonstrativo. Nenhum dado real é armazenado.</small>
+        <small>
+          Os dados de demonstração ficam neste navegador. Não informe dados
+          pessoais reais.
+        </small>
       </section>
       <section className="auth-form-wrap">
-        <button className="back-link" onClick={() => navigate("home")}>
-          <ArrowLeft size={18} /> Voltar para o início
-        </button>
         <form className="auth-form" onSubmit={submit} noValidate>
           <span className="form-icon">
             <User size={25} />
           </span>
-          <h2>Entre na sua conta</h2>
+          <h2>Entre na sua conta demonstrativa</h2>
           <p>Use qualquer CPF fictício e uma senha de 4 caracteres.</p>
           <label>
             CPF
@@ -1526,10 +1671,6 @@ function LoginPage({
             )}
           </label>
           <div className="form-options">
-            <label className="check-row">
-              <input type="checkbox" />
-              <span>Lembrar de mim</span>
-            </label>
             <button type="button" onClick={() => navigate("recover")}>
               Esqueci minha senha
             </button>
@@ -1538,7 +1679,7 @@ function LoginPage({
             Entrar <ArrowRight size={18} />
           </button>
           <div className="demo-hint">
-            <strong>Acesso demonstrativo</strong>
+            <strong>Conta local de demonstração</strong>
             <span>CPF: qualquer 11 números · Senha: mínimo 4 caracteres</span>
           </div>
         </form>
@@ -1558,22 +1699,22 @@ function RecoverPage({
   const [sent, setSent] = useState(false)
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!email.includes("@")) return
     setSent(true)
-    notify("Instruções de recuperação enviadas.")
+    notify("Recuperação não conectada: nenhum e-mail foi enviado.")
   }
   return (
     <main className="simple-auth">
-      <Logo onClick={() => navigate("home")} />
+      <Logo onClick={() => navigate("login")} />
       <div className="simple-auth-card">
         <span className="form-icon">
           <Mail size={24} />
         </span>
         {sent ? (
           <>
-            <h1>Confira seu e-mail</h1>
+            <h1>Recuperação indisponível</h1>
             <p>
-              Enviamos instruções de recuperação para <strong>{email}</strong>.
+              Este projeto não está conectado a um serviço de identidade.
+              Nenhum e-mail foi enviado para <strong>{email}</strong>.
             </p>
             <button
               className="button button-primary button-full"
@@ -1585,7 +1726,10 @@ function RecoverPage({
         ) : (
           <form onSubmit={submit}>
             <h1>Recuperar acesso</h1>
-            <p>Informe seu e-mail cadastrado para receber as instruções.</p>
+            <p>
+              A recuperação de senha exige um serviço de autenticação, que não
+              está conectado nesta demonstração.
+            </p>
             <label>
               E-mail
               <div className="input-wrap">
@@ -1600,7 +1744,7 @@ function RecoverPage({
               </div>
             </label>
             <button className="button button-primary button-full">
-              Enviar instruções
+              Verificar disponibilidade
             </button>
           </form>
         )}
@@ -1660,7 +1804,10 @@ function AreaPage({
             <Sparkles size={22} />
             <span>Em destaque</span>
             <strong>{area.highlight}</strong>
-            <small>Conteúdo demonstrativo atualizado hoje</small>
+            <small>
+              Dados ilustrativos; consulte os canais oficiais para informações
+              vigentes.
+            </small>
           </div>
         </div>
       </section>
@@ -1824,6 +1971,15 @@ function CitizenCenterPage({
   markNotificationRead,
   markAllNotificationsRead,
   clearNotifications,
+  documents,
+  appointments,
+  activities,
+  messages,
+  sendMessage,
+  savedJobs,
+  toggleJobSaved,
+  toggleAppointmentReminder,
+  cancelAppointment,
 }: {
   mode: Page
   navigate: (page: Page) => void
@@ -1837,14 +1993,28 @@ function CitizenCenterPage({
   markNotificationRead: (id: number) => void
   markAllNotificationsRead: () => void
   clearNotifications: () => void
+  documents: CitizenDocument[]
+  appointments: CitizenAppointment[]
+  activities: CitizenActivity[]
+  messages: CitizenMessage[]
+  sendMessage: (text: string) => void
+  savedJobs: string[]
+  toggleJobSaved: (title: string) => void
+  toggleAppointmentReminder: (id: string) => void
+  cancelAppointment: (id: string) => void
 }) {
   const [notificationFilter, setNotificationFilter] = useState("Todas")
-  const [selectedConversation, setSelectedConversation] = useState(0)
   const [message, setMessage] = useState("")
-  const [sentMessages, setSentMessages] = useState<string[]>([])
   const [jobQuery, setJobQuery] = useState("")
   const [remoteOnly, setRemoteOnly] = useState(false)
-  const [calendarMonth, setCalendarMonth] = useState(5)
+  const [savedJobsOnly, setSavedJobsOnly] = useState(false)
+  const [selectedProgram, setSelectedProgram] = useState<string | null>(null)
+  const [calendarDate, setCalendarDate] = useState(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  )
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(
+    null,
+  )
 
   const pageTitles: Record<string, [string, string]> = {
     documents: [
@@ -1882,8 +2052,6 @@ function CitizenCenterPage({
   }
   const [title, description] = pageTitles[mode] || pageTitles.documents
 
-  const documents = citizenDocuments
-
   const jobs = [
     {
       title: "Assistente administrativo",
@@ -1908,27 +2076,22 @@ function CitizenCenterPage({
       `${job.title} ${job.company}`
         .toLowerCase()
         .includes(jobQuery.toLowerCase()) &&
-      (!remoteOnly || job.location === "Remoto"),
+        (!remoteOnly || job.location === "Remoto") &&
+        (!savedJobsOnly || savedJobs.includes(job.title)),
   )
 
   let body: ReactNode
   if (mode === "documents") {
-    body = (
+    body = documents.length ? (
       <>
         <div className="document-overview">
           <div>
             <BadgeCheck size={23} />
             <span>
-              <strong>{documents.length} documentos verificados</strong>
-              <p>Todos estão disponíveis para consulta.</p>
+              <strong>{documents.length} documentos</strong>
+              <p>Documentos registrados nesta conta.</p>
             </span>
           </div>
-          <button
-            className="button button-outline"
-            onClick={() => notify("Verificação atualizada com sucesso.")}
-          >
-            <RotateCcw size={16} /> Atualizar
-          </button>
         </div>
         <div className="digital-documents-grid">
           {documents.map(({ title, number, valid, icon: Icon, color }) => (
@@ -1937,7 +2100,6 @@ function CitizenCenterPage({
                 <span>Cidadania Digital</span>
                 <Icon size={34} />
                 <strong>{title}</strong>
-                <small>Documento demonstrativo</small>
               </div>
               <div className="document-info">
                 <strong>{title}</strong>
@@ -1945,23 +2107,23 @@ function CitizenCenterPage({
                 <small>
                   <CheckCircle2 size={14} /> {valid}
                 </small>
-                <div>
-                  <button
-                    onClick={() => notify(`${title} aberto para visualização.`)}
-                  >
-                    <Eye size={16} /> Visualizar
-                  </button>
-                  <button
-                    onClick={() => notify("Download demonstrativo preparado.")}
-                  >
-                    <Download size={16} /> Baixar
-                  </button>
-                </div>
               </div>
             </article>
           ))}
         </div>
       </>
+    ) : (
+      <div className="empty-state">
+        <WalletCards size={36} />
+        <h2>Nenhum documento cadastrado</h2>
+        <p>Documentos só aparecerão aqui após serem emitidos ou vinculados.</p>
+        <button
+          className="button button-primary"
+          onClick={() => navigate("catalog")}
+        >
+          Explorar serviços
+        </button>
+      </div>
     )
   } else if (mode === "benefits") {
     body = (
@@ -1970,28 +2132,28 @@ function CitizenCenterPage({
           <div>
             <WalletCards />
             <span>
-              <small>Benefício ativo</small>
-              <strong>Auxílio Cidadão</strong>
-              <p>Próximo pagamento demonstrativo: 08 de julho</p>
+              <small>Benefícios vinculados a esta conta</small>
+              <strong>0 ativos</strong>
+              <p>Não há benefícios registrados neste navegador.</p>
             </span>
           </div>
-          <span className="status success">Cadastro regular</span>
+          <span className="status">Sem benefícios ativos</span>
         </div>
         <div className="content-card-grid">
           {[
             [
               "Tarifa Social de Energia",
-              "Você pode atender aos critérios",
-              "Verificar elegibilidade",
+              "Consulte os requisitos nos canais oficiais",
+              "Ver requisitos",
             ],
             [
               "Programa de Renda Municipal",
-              "Cadastro disponível até 30/07",
-              "Conhecer programa",
+              "Consulte prazos e regras com seu município",
+              "Ver orientações",
             ],
             [
               "Isenção de taxa em concursos",
-              "Benefício sujeito à análise",
+              "Consulte as regras do edital correspondente",
               "Ver orientações",
             ],
           ].map(([name, detail, action]) => (
@@ -2003,10 +2165,19 @@ function CitizenCenterPage({
               <p>{detail}</p>
               <button
                 className="text-link"
-                onClick={() => notify(`Informações de ${name} abertas.`)}
+                aria-expanded={selectedProgram === name}
+                onClick={() =>
+                  setSelectedProgram(selectedProgram === name ? null : name)
+                }
               >
                 {action} <ArrowRight size={16} />
               </button>
+              {selectedProgram === name && (
+                <p className="program-info">
+                  Os critérios deste programa não estão conectados a uma fonte
+                  oficial. Consulte o órgão responsável antes de solicitar.
+                </p>
+              )}
             </article>
           ))}
         </div>
@@ -2032,9 +2203,18 @@ function CitizenCenterPage({
             />
             <span>Somente remoto</span>
           </label>
+          <label className="switch-row">
+            <input
+              type="checkbox"
+              checked={savedJobsOnly}
+              onChange={(e) => setSavedJobsOnly(e.target.checked)}
+            />
+            <span>Somente salvas</span>
+          </label>
         </div>
-        <div className="jobs-list">
-          {jobs.map((job) => (
+        {jobs.length ? (
+          <div className="jobs-list">
+            {jobs.map((job) => (
             <article key={job.title}>
               <span>
                 <BriefcaseBusiness size={22} />
@@ -2048,13 +2228,23 @@ function CitizenCenterPage({
               </div>
               <button
                 className="button button-outline"
-                onClick={() => notify(`Vaga “${job.title}” salva.`)}
+                aria-pressed={savedJobs.includes(job.title)}
+                onClick={() => toggleJobSaved(job.title)}
               >
-                Salvar vaga
+                {savedJobs.includes(job.title)
+                  ? "Remover das salvas"
+                  : "Salvar vaga"}
               </button>
             </article>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <BriefcaseBusiness size={34} />
+            <h2>Nenhuma vaga encontrada</h2>
+            <p>Ajuste os filtros ou salve uma vaga para encontrá-la aqui.</p>
+          </div>
+        )}
       </>
     )
   } else if (mode === "notifications") {
@@ -2082,7 +2272,7 @@ function CitizenCenterPage({
               onClick={markAllNotificationsRead}
               disabled={notificationCount === 0}
             >
-              <CheckCheckIcon /> Marcar todas como lidas
+              <Check size={16} /> Marcar todas como lidas
             </button>
             <button
               className="notification-clear"
@@ -2095,24 +2285,31 @@ function CitizenCenterPage({
         </div>
         {shown.length ? (
           <div className="notification-list">
-            {shown.map(({ id, icon: Icon, title: itemTitle, text, time }) => (
-              <button
-                key={id}
-                className={readNotificationIds.includes(id) ? "read" : "unread"}
-                onClick={() => markNotificationRead(id)}
-              >
-                <span className="notification-list-icon">
-                  <Icon size={20} />
-                </span>
-                <span>
-                  <strong>{itemTitle}</strong>
-                  <p>{text}</p>
-                  <small>{time}</small>
-                </span>
-                {!readNotificationIds.includes(id) && <i />}
-                <ChevronRight size={18} />
-              </button>
-            ))}
+            {shown.map((notification) => {
+              const Icon = notificationIcons[notification.icon]
+              return (
+                <button
+                  key={notification.id}
+                  className={
+                    readNotificationIds.includes(notification.id)
+                      ? "read"
+                      : "unread"
+                  }
+                  onClick={() => markNotificationRead(notification.id)}
+                >
+                  <span className="notification-list-icon">
+                    <Icon size={20} />
+                  </span>
+                  <span>
+                    <strong>{notification.title}</strong>
+                    <p>{notification.text}</p>
+                    <small>{notification.time}</small>
+                  </span>
+                  {!readNotificationIds.includes(notification.id) && <i />}
+                  <ChevronRight size={18} />
+                </button>
+              )
+            })}
           </div>
         ) : (
           <div className="empty-state notification-empty">
@@ -2120,7 +2317,7 @@ function CitizenCenterPage({
             <h2>
               {notifications.length
                 ? "Nenhuma notificação nesta categoria"
-                : "Todas as notificações foram limpas"}
+                : "Você ainda não tem notificações"}
             </h2>
             <p>
               {notifications.length
@@ -2132,67 +2329,42 @@ function CitizenCenterPage({
       </>
     )
   } else if (mode === "messages") {
-    const conversations = [
-      ["Central de Identificação", "Recebemos seus documentos.", "10:24"],
-      ["Atendimento Municipal", "Como podemos ajudar?", "Ontem"],
-      ["Suporte Cidadania Digital", "Seu chamado foi atualizado.", "20 jun"],
-    ]
     body = (
       <div className="messages-layout">
-        <div className="conversation-list">
-          {conversations.map(([name, preview, time], index) => (
-            <button
-              className={selectedConversation === index ? "active" : ""}
-              key={name}
-              onClick={() => setSelectedConversation(index)}
-            >
-              <span>{name.slice(0, 2).toUpperCase()}</span>
-              <div>
-                <strong>{name}</strong>
-                <p>{preview}</p>
-              </div>
-              <small>{time}</small>
-            </button>
-          ))}
-        </div>
-        <div className="conversation-panel">
+        <div className="conversation-panel" style={{ gridColumn: "1 / -1" }}>
           <header>
-            <span>
-              {conversations[selectedConversation][0].slice(0, 2).toUpperCase()}
-            </span>
+            <span>CD</span>
             <div>
-              <strong>{conversations[selectedConversation][0]}</strong>
-              <small>Atendimento demonstrativo</small>
+              <strong>Mensagens desta demonstração</strong>
+              <small>Ficam salvas somente neste navegador.</small>
             </div>
           </header>
           <div className="message-thread">
-            <div className="received">
-              Olá, Marina. Recebemos seus documentos e a análise já foi
-              iniciada.<small>10:22</small>
-            </div>
-            <div className="sent">
-              Obrigada! Preciso enviar mais alguma informação?
-              <small>10:23</small>
-            </div>
-            <div className="received">
-              No momento, não. Avisaremos por aqui se algo for necessário.
-              <small>10:24</small>
-            </div>
-            {sentMessages.map((sent, index) => (
-              <div className="sent" key={`${sent}-${index}`}>
-                {sent}
-                <small>Agora</small>
+            {messages.length ? (
+              messages.map((sent) => (
+                <div className="sent" key={sent.id}>
+                  {sent.text}
+                  <small>{formatDisplayDateTime(sent.date)}</small>
+                </div>
+              ))
+            ) : (
+              <div className="empty-state">
+                <MessageSquare size={32} />
+                <h2>Nenhuma mensagem registrada</h2>
+                <p>
+                  As mensagens enviadas aqui são guardadas localmente e não
+                  chegam a um órgão público.
+                </p>
               </div>
-            ))}
+            )}
           </div>
           <form
             className="message-composer"
             onSubmit={(e) => {
               e.preventDefault()
               if (!message.trim()) return
-              setSentMessages([...sentMessages, message])
+              sendMessage(message)
               setMessage("")
-              notify("Mensagem enviada.")
             }}
           >
             <input
@@ -2238,60 +2410,47 @@ function CitizenCenterPage({
       </div>
     )
   } else if (mode === "history") {
-    body = (
+    body = activities.length ? (
       <div className="activity-history">
-        {[
-          [
-            "Hoje, 10:24",
-            "Mensagem recebida",
-            "Central de Identificação respondeu sua dúvida.",
-            MessageSquare,
-          ],
-          [
-            "Hoje, 09:15",
-            "Protocolo atualizado",
-            "Sua solicitação avançou para a etapa de análise.",
-            FileText,
-          ],
-          [
-            "24 jun, 15:40",
-            "Serviço favoritado",
-            "Você salvou Consultar Cartão de Vacinação.",
-            Heart,
-          ],
-          [
-            "22 jun, 11:08",
-            "Documento acessado",
-            "Certificado Escolar foi visualizado.",
-            Eye,
-          ],
-          [
-            "18 jun, 14:32",
-            "Solicitação criada",
-            "Carteira de Identidade Nacional.",
-            CheckCircle2,
-          ],
-        ].map(([date, itemTitle, detail, ItemIcon]) => {
-          const ActivityIcon = ItemIcon as LucideIcon
+        {activities.map((activity) => {
+          const ActivityIcon = activityIcons[activity.icon]
           return (
-            <article key={`${date}-${itemTitle}`}>
+            <article key={activity.id}>
               <span>
                 <ActivityIcon size={18} />
               </span>
               <div>
-                <small>{date as string}</small>
-                <strong>{itemTitle as string}</strong>
-                <p>{detail as string}</p>
+                <small>{formatDisplayDateTime(activity.date)}</small>
+                <strong>{activity.title}</strong>
+                <p>{activity.detail}</p>
               </div>
               <button
-                aria-label={`Ver ${itemTitle}`}
-                onClick={() => notify("Detalhes da atividade abertos.")}
+                aria-label={`Ver ${activity.title}`}
+                onClick={() =>
+                  navigate(
+                    activity.icon === "calendar"
+                      ? "calendar"
+                      : activity.icon === "heart"
+                        ? "favorites"
+                        : activity.icon === "message"
+                          ? "messages"
+                          : activity.icon === "briefcase"
+                            ? "jobs"
+                            : "protocols",
+                  )
+                }
               >
                 <ChevronRight size={18} />
               </button>
             </article>
           )
         })}
+      </div>
+    ) : (
+      <div className="empty-state">
+        <History size={36} />
+        <h2>Seu histórico está vazio</h2>
+        <p>As ações realizadas nesta conta aparecerão aqui.</p>
       </div>
     )
   } else {
@@ -2309,20 +2468,43 @@ function CitizenCenterPage({
       "Novembro",
       "Dezembro",
     ]
+    const year = calendarDate.getFullYear()
+    const month = calendarDate.getMonth()
+    const firstWeekday = new Date(year, month, 1).getDay()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const calendarCellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7
+    const appointmentDates = new Set(appointments.map((item) => item.date))
+    const today = dateInputValue(new Date())
+    const upcomingAppointments = appointments
+      .filter((appointment) => appointment.date >= today)
+      .sort((a, b) =>
+        `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`),
+      )
+    const shownAppointments = selectedCalendarDate
+      ? upcomingAppointments.filter(
+          (appointment) => appointment.date === selectedCalendarDate,
+        )
+      : upcomingAppointments
     body = (
       <div className="calendar-layout">
         <div className="mini-calendar">
           <header>
             <button
               aria-label="Mês anterior"
-              onClick={() => setCalendarMonth((current) => (current + 11) % 12)}
+              onClick={() => {
+                setSelectedCalendarDate(null)
+                setCalendarDate(new Date(year, month - 1, 1))
+              }}
             >
               <ArrowLeft size={17} />
             </button>
-            <strong>{monthNames[calendarMonth]} de 2025</strong>
+            <strong>{monthNames[month]} de {year}</strong>
             <button
               aria-label="Próximo mês"
-              onClick={() => setCalendarMonth((current) => (current + 1) % 12)}
+              onClick={() => {
+                setSelectedCalendarDate(null)
+                setCalendarDate(new Date(year, month + 1, 1))
+              }}
             >
               <ArrowRight size={17} />
             </button>
@@ -2333,28 +2515,20 @@ function CitizenCenterPage({
             ))}
           </div>
           <div className="calendar-days">
-            {Array.from({ length: 35 }, (_, index) => {
-              const day = index - 1
+            {Array.from({ length: calendarCellCount }, (_, index) => {
+              const day = index - firstWeekday + 1
+              const dayValue = dateInputValue(new Date(year, month, day, 12))
               return (
                 <button
                   key={index}
-                  disabled={day < 1 || day > 30}
-                  className={
-                    calendarMonth === 5 && day === 26
-                      ? "selected"
-                      : calendarMonth === 5 && day === 30
-                        ? "has-event"
-                        : ""
-                  }
-                  onClick={() =>
-                    day > 0 &&
-                    day <= 30 &&
-                    notify(
-                      `Dia ${day} de ${monthNames[calendarMonth]} selecionado.`,
-                    )
-                  }
+                  disabled={day < 1 || day > daysInMonth}
+                  className={`${selectedCalendarDate === dayValue ? "selected" : ""} ${
+                    appointmentDates.has(dayValue) ? "has-event" : ""
+                  }`}
+                  aria-label={`${day} de ${monthNames[month]} de ${year}`}
+                  onClick={() => setSelectedCalendarDate(dayValue)}
                 >
-                  {day > 0 && day <= 30 ? day : ""}
+                  {day > 0 && day <= daysInMonth ? day : ""}
                 </button>
               )
             })}
@@ -2362,7 +2536,11 @@ function CitizenCenterPage({
         </div>
         <div className="calendar-agenda">
           <div className="panel-heading">
-            <h2>Próximos compromissos</h2>
+            <h2>
+              {selectedCalendarDate
+                ? `Compromissos em ${formatDisplayDate(selectedCalendarDate)}`
+                : "Próximos compromissos"}
+            </h2>
             <button
               className="text-link"
               onClick={() => navigate("scheduling")}
@@ -2370,34 +2548,49 @@ function CitizenCenterPage({
               Novo agendamento <Plus size={16} />
             </button>
           </div>
-          <article>
-            <span className="calendar-date-box">
-              <strong>26</strong>JUN
-            </span>
-            <div>
-              <span className="status warning">Atendimento</span>
-              <h3>Posto Central de Atendimento</h3>
+          {shownAppointments.length ? (
+            shownAppointments.map((appointment) => {
+              const appointmentDate = new Date(`${appointment.date}T12:00:00`)
+              return (
+                <article key={appointment.id}>
+                  <span className="calendar-date-box">
+                    <strong>{appointmentDate.getDate()}</strong>
+                    {monthNames[appointmentDate.getMonth()].slice(0, 3).toUpperCase()}
+                  </span>
+                  <div>
+                    <span className="status warning">Agendamento</span>
+                    <h3>{appointment.service}</h3>
+                    <p>
+                      <Clock3 size={15} /> {appointment.time} ·{" "}
+                      <MapPin size={15} /> {appointment.unit}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => toggleAppointmentReminder(appointment.id)}
+                  >
+                    {appointment.reminder
+                      ? "Lembrete ativo"
+                      : "Criar lembrete"}
+                  </button>
+                  <button
+                    onClick={() => cancelAppointment(appointment.id)}
+                  >
+                    Cancelar
+                  </button>
+                </article>
+              )
+            })
+          ) : (
+            <div className="empty-state">
+              <CalendarDays size={32} />
+              <h2>Nenhum compromisso</h2>
               <p>
-                <Clock3 size={15} /> 10:30 · <MapPin size={15} /> Centro
+                {selectedCalendarDate
+                  ? "Não há agendamentos nessa data."
+                  : "Seus agendamentos futuros aparecerão aqui."}
               </p>
             </div>
-            <button onClick={() => notify("Lembrete configurado.")}>
-              Criar lembrete
-            </button>
-          </article>
-          <article>
-            <span className="calendar-date-box">
-              <strong>30</strong>JUN
-            </span>
-            <div>
-              <span className="status danger">Prazo</span>
-              <h3>Enviar comprovante de residência</h3>
-              <p>
-                <FileText size={15} /> Protocolo CD-2025-004113
-              </p>
-            </div>
-            <button onClick={() => navigate("protocols")}>Ver protocolo</button>
-          </article>
+          )}
         </div>
       </div>
     )
@@ -2424,35 +2617,49 @@ function CitizenCenterPage({
   )
 }
 
-function CheckCheckIcon() {
-  return (
-    <span className="double-check" aria-hidden="true">
-      <Check size={14} />
-      <Check size={14} />
-    </span>
-  )
-}
-
 function DashboardPage({
   navigate,
   favorites,
   selectService,
-  notify,
   notificationCount,
+  protocols,
+  appointments,
+  documents,
+  activities,
 }: {
   navigate: (page: Page) => void
   favorites: number[]
   selectService: (service: Service) => void
-  notify: (message: string) => void
   notificationCount: number
+  protocols: CitizenProtocol[]
+  appointments: CitizenAppointment[]
+  documents: CitizenDocument[]
+  activities: CitizenActivity[]
 }) {
+  const today = dateInputValue(new Date())
+  const upcomingAppointments = appointments
+    .filter((appointment) => appointment.date >= today)
+    .sort((a, b) =>
+      `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`),
+    )
+  const nextAppointment = upcomingAppointments[0]
+  const pendingProtocol = protocols.find((protocol) =>
+    protocol.status.toLowerCase().includes("aguardando"),
+  )
+  const recommendedService =
+    services.find(
+      (service) => !protocols.some((protocol) => protocol.title === service.title),
+    ) ?? services[0]
   const dashboardSignals = {
-    activeProtocols: initialProtocols.filter(
-      (item) => item.status !== "Concluído",
+    activeProtocols: protocols.filter(
+      (item) =>
+        item.status !== "Concluído" && item.status !== "Cancelado",
     ).length,
-    nextAppointment: "26 jun · 10:30",
+    nextAppointment: nextAppointment
+      ? `${formatDisplayDate(nextAppointment.date)} · ${nextAppointment.time}`
+      : "Nenhum",
     favorites: favorites.length,
-    documents: citizenDocuments.length,
+    documents: documents.length,
   }
 
   return (
@@ -2466,13 +2673,13 @@ function DashboardPage({
             <div className="dashboard-welcome-copy">
               <span className="dashboard-eyebrow">Área do cidadão</span>
               <h1>Olá, Marina!</h1>
-              <p>Acompanhe seus serviços e acesse o que precisa.</p>
+              <p>Dados desta conta salvos neste navegador.</p>
               <div className="profile-account-details">
                 <span>
-                  <BadgeCheck size={15} /> Perfil verificado
+                  <FileText size={15} /> {protocols.length} serviços iniciados
                 </span>
                 <span>
-                  <User size={15} /> CPF final 4821
+                  <CalendarDays size={15} /> {upcomingAppointments.length} agendamentos futuros
                 </span>
               </div>
             </div>
@@ -2482,17 +2689,15 @@ function DashboardPage({
               <CalendarDays size={18} />
               <span>
                 <small>Data de referência</small>
-                <strong>Quarta, 25 de junho</strong>
+                <strong>
+                  {new Intl.DateTimeFormat("pt-BR", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  }).format(new Date())}
+                </strong>
               </span>
             </span>
-            <button
-              className="profile-edit-button"
-              onClick={() =>
-                notify("Atualização de perfil disponível em modo demonstrativo.")
-              }
-            >
-              Atualizar perfil <ArrowRight size={16} />
-            </button>
           </div>
         </div>
         <CitizenCenterNav
@@ -2500,26 +2705,26 @@ function DashboardPage({
           navigate={navigate}
           notificationCount={notificationCount}
         />
-        <section className="pending-banner">
-          <span className="pending-icon">
-            <Archive size={22} />
-          </span>
-          <div>
-            <span className="status danger">Ação necessária</span>
-            <h2>Envie um comprovante para continuar</h2>
-            <p>
-              O protocolo CD-2025-004113 aguarda um comprovante de residência.
-            </p>
-          </div>
-          <button
-            className="button button-primary"
-            onClick={() =>
-              notify("Envio de documento aberto em modo demonstrativo.")
-            }
-          >
-            Enviar documento <ArrowRight size={17} />
-          </button>
-        </section>
+        {pendingProtocol && (
+          <section className="pending-banner">
+            <span className="pending-icon">
+              <Archive size={22} />
+            </span>
+            <div>
+              <span className="status danger">Ação necessária</span>
+              <h2>{pendingProtocol.title}</h2>
+              <p>
+                O protocolo {pendingProtocol.code} está aguardando uma ação.
+              </p>
+            </div>
+            <button
+              className="button button-primary"
+              onClick={() => navigate("protocols")}
+            >
+              Ver solicitação <ArrowRight size={17} />
+            </button>
+          </section>
+        )}
         <div className="metric-grid">
           <button onClick={() => navigate("protocols")}>
             <span className="metric-icon blue">
@@ -2583,55 +2788,97 @@ function DashboardPage({
                 </button>
               }
             />
-            {initialProtocols.slice(0, 2).map((protocol) => (
-              <button
-                className="protocol-row"
-                key={protocol.code}
-                onClick={() => navigate("protocols")}
-              >
-                <span className="protocol-doc">
-                  <FileText size={20} />
-                </span>
-                <span className="protocol-info">
-                  <strong>{protocol.title}</strong>
-                  <small>
-                    {protocol.code} · {protocol.date}
-                  </small>
-                </span>
-                <span
-                  className={`status ${
-                    protocol.status === "Concluído" ? "success" : "warning"
-                  }`}
+            {protocols.length ? (
+              protocols.slice(0, 2).map((protocol) => (
+                <button
+                  className="protocol-row"
+                  key={protocol.code}
+                  onClick={() => navigate("protocols")}
                 >
-                  {protocol.status}
-                </span>
-                <ChevronRight size={18} />
-              </button>
-            ))}
+                  <span className="protocol-doc">
+                    <FileText size={20} />
+                  </span>
+                  <span className="protocol-info">
+                    <strong>{protocol.title}</strong>
+                    <small>
+                      {protocol.code} · {formatDisplayDate(protocol.date)}
+                    </small>
+                  </span>
+                  <span
+                    className={`status ${
+                      protocol.status === "Concluído"
+                        ? "success"
+                        : protocol.status.toLowerCase().includes("aguardando")
+                          ? "danger"
+                          : "warning"
+                    }`}
+                  >
+                    {protocol.status}
+                  </span>
+                  <ChevronRight size={18} />
+                </button>
+              ))
+            ) : (
+              <div className="empty-state">
+                <FileText size={30} />
+                <h2>Nenhuma solicitação iniciada</h2>
+                <p>Quando você iniciar um serviço, o protocolo aparecerá aqui.</p>
+                <button
+                  className="button button-outline"
+                  onClick={() => navigate("catalog")}
+                >
+                  Explorar serviços
+                </button>
+              </div>
+            )}
           </section>
           <aside className="dashboard-panel next-appointment">
             <div className="panel-label">
               <CalendarDays size={18} /> Próximo atendimento
             </div>
-            <div className="appointment-date">
-              <strong>26</strong>
-              <span>
-                JUN<small>Quinta-feira</small>
-              </span>
-            </div>
-            <h3>Posto Central de Atendimento</h3>
-            <p>
-              <Clock3 size={16} /> 10:30
-            </p>
-            <p>
-              <MapPin size={16} /> Av. Cidadania, 100 · Centro
-            </p>
-            <button
-              className="button button-outline button-full"
-              onClick={() => navigate("scheduling")}
-            >
-              Ver agendamento
-            </button>
+            {nextAppointment ? (
+              <>
+                <div className="appointment-date">
+                  <strong>
+                    {new Date(`${nextAppointment.date}T12:00:00`).getDate()}
+                  </strong>
+                  <span>
+                    {new Date(`${nextAppointment.date}T12:00:00`)
+                      .toLocaleDateString("pt-BR", { month: "short" })
+                      .replace(".", "")
+                      .toUpperCase()}
+                    <small>
+                      {new Date(
+                        `${nextAppointment.date}T12:00:00`,
+                      ).toLocaleDateString("pt-BR", { weekday: "long" })}
+                    </small>
+                  </span>
+                </div>
+                <h3>{nextAppointment.service}</h3>
+                <p>
+                  <Clock3 size={16} /> {nextAppointment.time}
+                </p>
+                <p>
+                  <MapPin size={16} /> {nextAppointment.unit}
+                </p>
+                <button
+                  className="button button-outline button-full"
+                  onClick={() => navigate("calendar")}
+                >
+                  Ver agendamento
+                </button>
+              </>
+            ) : (
+              <>
+                <p>Você não tem agendamentos futuros.</p>
+                <button
+                  className="button button-outline button-full"
+                  onClick={() => navigate("scheduling")}
+                >
+                  Agendar atendimento
+                </button>
+              </>
+            )}
           </aside>
         </div>
         <section className="dashboard-panel">
@@ -2708,42 +2955,41 @@ function DashboardPage({
                 </button>
               }
             />
-            {[
-              ["Protocolo atualizado", "Hoje, 09:15", FileText],
-              ["Nova mensagem recebida", "Ontem, 16:40", MessageSquare],
-              ["Documento disponível", "22 jun, 11:08", WalletCards],
-            ].map(([label, time, ActivityIcon]) => {
-              const Icon = ActivityIcon as LucideIcon
-              return (
-                <button
-                  key={label as string}
-                  onClick={() => navigate("history")}
-                >
-                  <span>
-                    <Icon size={18} />
-                  </span>
-                  <strong>{label as string}</strong>
-                  <small>{time as string}</small>
-                  <ChevronRight size={17} />
-                </button>
-              )
-            })}
+            {activities.length ? (
+              activities.slice(0, 3).map((activity) => {
+                const Icon = activityIcons[activity.icon]
+                return (
+                  <button
+                    key={activity.id}
+                    onClick={() => navigate("history")}
+                  >
+                    <span>
+                      <Icon size={18} />
+                    </span>
+                    <strong>{activity.title}</strong>
+                    <small>{formatDisplayDateTime(activity.date)}</small>
+                    <ChevronRight size={17} />
+                  </button>
+                )
+              })
+            ) : (
+              <div className="empty-state">
+                <History size={28} />
+                <p>Nenhuma atividade registrada.</p>
+              </div>
+            )}
           </section>
           <section className="dashboard-panel recommendation-panel">
             <span className="panel-label">
-              <Sparkles size={20} /> Recomendado para você
+              <Sparkles size={20} /> Serviço disponível
             </span>
-            <h2>Curso gratuito de atendimento digital</h2>
-            <p>
-              Formação online de 20 horas, com certificado e inscrições abertas.
-            </p>
+            <h2>{recommendedService.title}</h2>
+            <p>{recommendedService.description}</p>
             <button
               className="button button-outline button-full"
-              onClick={() =>
-                selectService(services.find((item) => item.id === 12)!)
-              }
+              onClick={() => selectService(recommendedService)}
             >
-              Conhecer curso <ArrowRight size={16} />
+              Ver serviço <ArrowRight size={16} />
             </button>
           </section>
         </div>
@@ -2775,20 +3021,51 @@ function DashboardPage({
   )
 }
 
-function ProtocolsPage({ notify }: { notify: (message: string) => void }) {
+function ProtocolsPage({
+  notify,
+  protocols,
+}: {
+  notify: (message: string) => void
+  protocols: CitizenProtocol[]
+}) {
   const [query, setQuery] = useState("")
-  const [selected, setSelected] = useState(initialProtocols[0])
+  const [selected, setSelected] = useState<CitizenProtocol | null>(
+    protocols[0] ?? null,
+  )
   const [searched, setSearched] = useState(false)
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    const found = initialProtocols.find((item) =>
-      item.code.toLowerCase().includes(query.toLowerCase()),
+    const found = protocols.find(
+      (item) => item.code.toLowerCase() === query.trim().toLowerCase(),
     )
     if (found) {
       setSelected(found)
       setSearched(true)
       notify("Protocolo localizado.")
-    } else notify("Protocolo não encontrado. Tente CD-2025-008271.")
+    } else {
+      setSelected(null)
+      setSearched(true)
+      notify("Esse protocolo não está salvo nesta conta.")
+    }
+  }
+  const downloadReceipt = () => {
+    if (!selected) return
+    const receipt = [
+      "Comprovante de solicitação — Cidadania Digital",
+      `Protocolo: ${selected.code}`,
+      `Serviço: ${selected.title}`,
+      `Aberto em: ${formatDisplayDateTime(selected.date)}`,
+      `Status: ${selected.status}`,
+      "",
+      "Registro local demonstrativo; não enviado a um órgão público.",
+    ].join("\n")
+    const file = new Blob([receipt], { type: "text/plain;charset=utf-8" })
+    const url = URL.createObjectURL(file)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${selected.code}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
   }
   return (
     <main>
@@ -2809,7 +3086,7 @@ function ProtocolsPage({ notify }: { notify: (message: string) => void }) {
                 id="protocol"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ex.: CD-2025-008271"
+                placeholder="CD-ANO-CÓDIGO"
                 required
               />
               <button className="button button-primary">Consultar</button>
@@ -2818,112 +3095,153 @@ function ProtocolsPage({ notify }: { notify: (message: string) => void }) {
           </form>
           <div className="panel-heading">
             <h2>{searched ? "Resultado da consulta" : "Seus protocolos"}</h2>
-            <span>{initialProtocols.length} solicitações</span>
+            <span>{protocols.length} solicitações</span>
           </div>
           <div className="protocol-list">
-            {initialProtocols.map((protocol) => (
-              <button
-                className={selected.code === protocol.code ? "selected" : ""}
-                key={protocol.code}
-                onClick={() => setSelected(protocol)}
-              >
-                <span className="protocol-doc">
-                  <FileText size={20} />
-                </span>
-                <span className="protocol-info">
-                  <strong>{protocol.title}</strong>
-                  <small>
-                    {protocol.code} · Aberto em {protocol.date}
-                  </small>
-                </span>
-                <span
-                  className={`status ${
-                    protocol.status === "Concluído"
-                      ? "success"
-                      : protocol.status.includes("Aguardando")
-                        ? "danger"
-                        : "warning"
-                  }`}
+            {protocols.length ? (
+              protocols.map((protocol) => (
+                <button
+                  className={
+                    selected?.code === protocol.code ? "selected" : ""
+                  }
+                  key={protocol.code}
+                  onClick={() => setSelected(protocol)}
                 >
-                  {protocol.status}
-                </span>
-                <ChevronRight size={18} />
-              </button>
-            ))}
+                  <span className="protocol-doc">
+                    <FileText size={20} />
+                  </span>
+                  <span className="protocol-info">
+                    <strong>{protocol.title}</strong>
+                    <small>
+                      {protocol.code} · Aberto em {formatDisplayDate(protocol.date)}
+                    </small>
+                  </span>
+                  <span
+                    className={`status ${
+                      protocol.status === "Concluído"
+                        ? "success"
+                        : protocol.status.toLowerCase().includes("aguardando")
+                          ? "danger"
+                          : "warning"
+                    }`}
+                  >
+                    {protocol.status}
+                  </span>
+                  <ChevronRight size={18} />
+                </button>
+              ))
+            ) : (
+              <div className="empty-state">
+                <FileText size={32} />
+                <h2>
+                  {searched
+                    ? "Protocolo não encontrado"
+                    : "Nenhuma solicitação iniciada"}
+                </h2>
+                <p>
+                  {searched
+                    ? "A consulta local só encontra protocolos criados nesta conta."
+                    : "Inicie um serviço do catálogo para criar seu primeiro protocolo."}
+                </p>
+              </div>
+            )}
           </div>
         </section>
-        <aside className="protocol-detail">
-          <span
-            className={`status ${
-              selected.status === "Concluído" ? "success" : "warning"
-            }`}
-          >
-            {selected.status}
-          </span>
-          <h2>{selected.title}</h2>
-          <p className="protocol-number">{selected.code}</p>
-          <div className="timeline">
-            {[
-              "Solicitação enviada",
-              "Documentos recebidos",
-              "Análise concluída",
-            ].map((label, index) => (
-              <div className={index <= selected.step ? "done" : ""} key={label}>
-                <span>
-                  {index <= selected.step ? <Check size={15} /> : index + 1}
-                </span>
-                <div>
-                  <strong>{label}</strong>
-                  <small>
-                    {index === 0
-                      ? selected.date
-                      : index <= selected.step
-                        ? "Etapa concluída"
-                        : "Aguardando"}
-                  </small>
+        {selected && (
+          <aside className="protocol-detail">
+            <span
+              className={`status ${
+                selected.status === "Concluído" ? "success" : "warning"
+              }`}
+            >
+              {selected.status}
+            </span>
+            <h2>{selected.title}</h2>
+            <p className="protocol-number">{selected.code}</p>
+            <div className="timeline">
+              {[
+                "Solicitação registrada",
+                "Documentos recebidos",
+                "Análise concluída",
+              ].map((label, index) => (
+                <div
+                  className={index <= selected.step ? "done" : ""}
+                  key={label}
+                >
+                  <span>
+                    {index <= selected.step ? <Check size={15} /> : index + 1}
+                  </span>
+                  <div>
+                    <strong>{label}</strong>
+                    <small>
+                      {index === 0
+                        ? formatDisplayDateTime(selected.date)
+                        : index <= selected.step
+                          ? "Etapa concluída"
+                          : "Aguardando atualização"}
+                    </small>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          <div className="info-note">
-            <CircleHelp size={18} />
-            <p>
-              <strong>Previsão de conclusão</strong>
-              <br />
-              Até 5 dias úteis após o envio.
-            </p>
-          </div>
-          <button
-            className="button button-outline button-full"
-            onClick={() =>
-              notify("Comprovante preparado para download (demonstração).")
-            }
-          >
-            Baixar comprovante
-          </button>
-        </aside>
+              ))}
+            </div>
+            <div className="info-note">
+              <CircleHelp size={18} />
+              <p>
+                Este protocolo foi salvo localmente. O portal não consulta
+                sistemas governamentais.
+              </p>
+            </div>
+            <button
+              className="button button-outline button-full"
+              onClick={downloadReceipt}
+            >
+              Baixar comprovante
+            </button>
+          </aside>
+        )}
       </div>
     </main>
   )
 }
 
-function SchedulingPage({ notify }: { notify: (message: string) => void }) {
+function SchedulingPage({
+  notify,
+  appointments,
+  onConfirm,
+}: {
+  notify: (message: string) => void
+  appointments: CitizenAppointment[]
+  onConfirm: (
+    details: Omit<CitizenAppointment, "id" | "reminder">,
+  ) => boolean
+}) {
   const [step, setStep] = useState(1)
   const [service, setService] = useState("")
   const [unit, setUnit] = useState("")
   const [date, setDate] = useState("")
   const [time, setTime] = useState("")
   const [confirmed, setConfirmed] = useState(false)
+  const today = dateInputValue(new Date())
+  const reservedSlots = new Set(
+    appointments
+      .filter(
+        (appointment) =>
+          appointment.date === date && appointment.unit === unit,
+      )
+      .map((appointment) => appointment.time),
+  )
   const next = () => {
     if (step === 1 && (!service || !unit))
       return notify("Escolha o serviço e a unidade.")
     if (step === 2 && (!date || !time))
       return notify("Escolha a data e o horário.")
+    if (step === 2 && date < today)
+      return notify("A data do agendamento não pode estar no passado.")
     setStep(step + 1)
   }
   const confirm = () => {
-    setConfirmed(true)
-    notify("Agendamento confirmado com sucesso.")
+    const saved = onConfirm({ service, unit, date, time })
+    if (saved) setConfirmed(true)
   }
   if (confirmed)
     return (
@@ -2933,11 +3251,11 @@ function SchedulingPage({ notify }: { notify: (message: string) => void }) {
             <Check size={34} />
           </span>
           <h1>Agendamento confirmado!</h1>
-          <p>Enviamos os detalhes para o seu e-mail.</p>
+          <p>O compromisso foi salvo no calendário desta conta.</p>
           <div>
             <strong>{service}</strong>
             <p>
-              <CalendarDays size={17} /> {date} às {time}
+              <CalendarDays size={17} /> {formatDisplayDate(date)} às {time}
             </p>
             <p>
               <MapPin size={17} /> {unit}
@@ -2997,21 +3315,26 @@ function SchedulingPage({ notify }: { notify: (message: string) => void }) {
                     onChange={(e) => setService(e.target.value)}
                   >
                     <option value="">Selecione um serviço</option>
-                    <option>Emissão de Carteira de Identidade</option>
-                    <option>Atualização cadastral</option>
-                    <option>Orientação sobre benefícios</option>
+                    {services.map((availableService) => (
+                      <option key={availableService.id}>
+                        {availableService.title}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
                   Unidade
                   <select
                     value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
+                    onChange={(e) => {
+                      setUnit(e.target.value)
+                      setTime("")
+                    }}
                   >
                     <option value="">Selecione uma unidade</option>
-                    <option>Posto Central de Atendimento</option>
-                    <option>Unidade Cidadania Norte</option>
-                    <option>Unidade Cidadania Sul</option>
+                    {appointmentUnits.map((availableUnit) => (
+                      <option key={availableUnit}>{availableUnit}</option>
+                    ))}
                   </select>
                 </label>
               </div>
@@ -3025,33 +3348,42 @@ function SchedulingPage({ notify }: { notify: (message: string) => void }) {
                 </span>
                 <div>
                   <h2>Escolha a data e o horário</h2>
-                  <p>Horários exibidos conforme disponibilidade fictícia.</p>
+                  <p>Os horários ocupados nesta conta ficam indisponíveis.</p>
                 </div>
               </div>
               <label className="date-field">
                 Data do atendimento
                 <input
                   type="date"
-                  min="2025-06-26"
+                  min={today}
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => {
+                    setDate(e.target.value)
+                    setTime("")
+                  }}
                 />
               </label>
-              <fieldset className="time-slots">
-                <legend>Horários disponíveis</legend>
-                {["08:30", "09:00", "10:30", "14:00", "15:30", "16:00"].map(
-                  (slot) => (
+              {date && unit ? (
+                <fieldset className="time-slots">
+                  <legend>Horários disponíveis nesta conta</legend>
+                  {appointmentTimeSlots.map((slot) => {
+                    const reserved = reservedSlots.has(slot)
+                    return (
                     <button
                       type="button"
                       className={time === slot ? "selected" : ""}
                       key={slot}
+                      disabled={reserved}
                       onClick={() => setTime(slot)}
                     >
-                      {slot}
+                      {slot}{reserved ? " · ocupado" : ""}
                     </button>
-                  ),
-                )}
-              </fieldset>
+                    )
+                  })}
+                </fieldset>
+              ) : (
+                <p>Selecione uma data e unidade para ver os horários.</p>
+              )}
             </>
           )}
           {step === 3 && (
@@ -3076,7 +3408,7 @@ function SchedulingPage({ notify }: { notify: (message: string) => void }) {
                 </div>
                 <div>
                   <small>Data</small>
-                  <strong>{date}</strong>
+                  <strong>{formatDisplayDate(date)}</strong>
                 </div>
                 <div>
                   <small>Horário</small>
@@ -3086,8 +3418,8 @@ function SchedulingPage({ notify }: { notify: (message: string) => void }) {
               <div className="info-note">
                 <ShieldCheck size={19} />
                 <p>
-                  Leve um documento oficial com foto e chegue com 10 minutos de
-                  antecedência.
+                  Consulte os requisitos oficiais do serviço antes de ir à
+                  unidade. Esta demonstração não possui integração municipal.
                 </p>
               </div>
             </>
@@ -3119,25 +3451,25 @@ function SchedulingPage({ notify }: { notify: (message: string) => void }) {
   )
 }
 
-function HelpPage({ notify }: { notify: (message: string) => void }) {
+function HelpPage({ navigate }: { navigate: (page: Page) => void }) {
   const [search, setSearch] = useState("")
   const [open, setOpen] = useState<number | null>(0)
   const faqs = [
     [
       "Como acompanho uma solicitação?",
-      "Acesse “Acompanhar protocolo” no menu e informe o número recebido ao concluir o serviço. Se estiver conectado, suas solicitações também aparecem no painel.",
+      "Inicie um serviço enquanto estiver conectado à conta de demonstração. O protocolo local aparece no painel e em “Acompanhar protocolo”.",
     ],
     [
       "Esqueci minha senha. O que devo fazer?",
-      "Na tela de acesso, selecione “Esqueci minha senha” e informe o e-mail cadastrado para receber as instruções.",
+      "A recuperação de senha não está conectada a um serviço de identidade; nenhum e-mail é enviado nesta demonstração.",
     ],
     [
       "Como cancelar um agendamento?",
-      "Acesse o painel do cidadão, abra o agendamento e selecione a opção de cancelamento.",
+      "Abra “Calendário” na área do cidadão e use “Cancelar” no compromisso correspondente.",
     ],
     [
       "Meus dados estão seguros?",
-      "Este é um ambiente demonstrativo e não armazena dados reais. Em um portal oficial, dados devem seguir a legislação de proteção vigente.",
+      "Os dados de demonstração são salvos no armazenamento local deste navegador e não são enviados a órgãos públicos. Não informe dados pessoais reais.",
     ],
   ]
   const shown = faqs.filter((item) =>
@@ -3149,11 +3481,11 @@ function HelpPage({ notify }: { notify: (message: string) => void }) {
         <div className="container">
           <span className="eyebrow">Central de ajuda</span>
           <h1>Como podemos ajudar?</h1>
-          <p>Encontre respostas rápidas ou fale com nosso atendimento.</p>
+          <p>Encontre respostas sobre os recursos desta demonstração local.</p>
           <SearchBox
             value={search}
             setValue={setSearch}
-            onSearch={() => undefined}
+            onSearch={() => setSearch(search.trim())}
             compact
             placeholder="Busque uma dúvida ou assunto"
           />
@@ -3184,19 +3516,17 @@ function HelpPage({ notify }: { notify: (message: string) => void }) {
           <span>
             <MessageCircleQuestion />
           </span>
-          <h2>Ainda precisa de ajuda?</h2>
-          <p>Nossa equipe está disponível de segunda a sexta, das 8h às 18h.</p>
+          <h2>Atendimento não conectado</h2>
+          <p>
+            Você pode registrar uma mensagem local, mas ela não será enviada a
+            uma equipe real.
+          </p>
           <button
             className="button button-primary button-full"
-            onClick={() =>
-              notify("Atendimento por chat iniciado (demonstração).")
-            }
+            onClick={() => navigate("messages")}
           >
-            Iniciar atendimento
+            Abrir mensagens locais
           </button>
-          <div>
-            <Mail size={16} /> ajuda@cidadaniadigital.demo
-          </div>
         </aside>
       </div>
     </main>
@@ -3210,8 +3540,8 @@ function Footer({ navigate }: { navigate: (page: Page) => void }) {
         <div>
           <Logo onClick={() => navigate("home")} />
           <p>
-            Serviços públicos digitais com simplicidade, segurança e
-            transparência.
+            Protótipo local para explorar serviços e testar os recursos do
+            portal. Não conectado a sistemas governamentais.
           </p>
         </div>
         <div>
@@ -3239,7 +3569,7 @@ function Footer({ navigate }: { navigate: (page: Page) => void }) {
         </div>
       </div>
       <div className="container footer-bottom">
-        <span>© 2025 Cidadania Digital</span>
+        <span>© {new Date().getFullYear()} Cidadania Digital</span>
         <span>Feito para aproximar serviços e cidadãos.</span>
       </div>
     </footer>
@@ -3247,23 +3577,82 @@ function Footer({ navigate }: { navigate: (page: Page) => void }) {
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>("home")
+  const [page, setPage] = useState<Page>("login")
   const [search, setSearch] = useState("")
   const [selectedService, setSelectedService] = useState<Service>(services[0])
+  const [selectedProposal, setSelectedProposal] = useState<Proposal>(
+    proposalList[0],
+  )
   const [selectedArea, setSelectedArea] = useState(portalAreas[0])
-  const [favorites, setFavorites] = useState<number[]>([2])
+  const [favorites, setFavorites] = usePersistentState(
+    "portal-cidadania-favorites",
+    [],
+    (value): value is number[] => isArrayOf(value, isNumber),
+  )
+  const [protocols, setProtocols] = usePersistentState(
+    "portal-cidadania-protocols",
+    [],
+    (value): value is CitizenProtocol[] =>
+      isArrayOf(value, isCitizenProtocol),
+  )
+  const [appointments, setAppointments] = usePersistentState(
+    "portal-cidadania-appointments",
+    [],
+    (value): value is CitizenAppointment[] =>
+      isArrayOf(value, isCitizenAppointment),
+  )
+  const [notifications, setNotifications] = usePersistentState(
+    "portal-cidadania-notifications",
+    [],
+    (value): value is CitizenNotification[] =>
+      isArrayOf(value, isCitizenNotification),
+  )
+  const [readNotificationIds, setReadNotificationIds] = usePersistentState(
+    "portal-cidadania-read-notifications",
+    [],
+    (value): value is number[] => isArrayOf(value, isNumber),
+  )
+  const [activities, setActivities] = usePersistentState(
+    "portal-cidadania-activities",
+    [],
+    (value): value is CitizenActivity[] => isArrayOf(value, isCitizenActivity),
+  )
+  const [messages, setMessages] = usePersistentState(
+    "portal-cidadania-messages",
+    [],
+    (value): value is CitizenMessage[] => isArrayOf(value, isCitizenMessage),
+  )
+  const [savedJobs, setSavedJobs] = usePersistentState(
+    "portal-cidadania-saved-jobs",
+    [],
+    (value): value is string[] => isArrayOf(value, isString),
+  )
   const [loggedIn, setLoggedIn] = useState(false)
   const [pendingService, setPendingService] = useState(false)
-  const [notifications, setNotifications] =
-    useState<CitizenNotification[]>(initialNotifications)
-  const [readNotificationIds, setReadNotificationIds] = useState<number[]>([3])
-  const [fontScale, setFontScale] = useState(100)
-  const [highContrast, setHighContrast] = useState(false)
-  const [reducedMotion, setReducedMotion] = useState(false)
+  const [fontScale, setFontScale] = usePersistentState(
+    "portal-cidadania-font-scale",
+    100,
+    (value): value is number =>
+      typeof value === "number" && value >= 90 && value <= 120,
+  )
+  const [highContrast, setHighContrast] = usePersistentState(
+    "portal-cidadania-high-contrast",
+    false,
+    (value): value is boolean => typeof value === "boolean",
+  )
+  const [reducedMotion, setReducedMotion] = usePersistentState(
+    "portal-cidadania-reduced-motion",
+    false,
+    (value): value is boolean => typeof value === "boolean",
+  )
   const [toast, setToast] = useState("")
   const toastTimer = useRef<number | null>(null)
 
   const navigate = (target: Page) => {
+    if (!loggedIn && target !== "login" && target !== "recover") {
+      setPage("login")
+      return
+    }
     setPage(target)
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -3271,6 +3660,42 @@ export default function App() {
     setToast(message)
     if (toastTimer.current) window.clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setToast(""), 3200)
+  }
+  const addActivity = (
+    title: string,
+    detail: string,
+    icon: CitizenActivity["icon"],
+  ) => {
+    setActivities((current) =>
+      [
+        {
+          id: `${Date.now()}-${Math.random()}`,
+          date: new Date().toISOString(),
+          title,
+          detail,
+          icon,
+        },
+        ...current,
+      ].slice(0, 100),
+    )
+  }
+  const addNotification = (
+    title: string,
+    text: string,
+    type: string,
+    icon: CitizenNotification["icon"],
+  ) => {
+    setNotifications((current) => [
+      {
+        id: Date.now() + current.length,
+        icon,
+        title,
+        text,
+        time: formatDisplayDateTime(new Date().toISOString()),
+        type,
+      },
+      ...current,
+    ])
   }
   const unreadNotificationCount = notifications.filter(
     (item) => !readNotificationIds.includes(item.id),
@@ -3286,27 +3711,24 @@ export default function App() {
   const clearNotifications = () => {
     setNotifications([])
     setReadNotificationIds([])
-    try {
-      window.localStorage.setItem(notificationsClearedStorageKey, "true")
-      notify("Todas as notificações foram removidas.")
-    } catch (error) {
-      console.error("Não foi possível salvar a limpeza das notificações.", error)
-      notify(
-        "Notificações removidas desta sessão, mas não foi possível salvar essa alteração no navegador.",
-      )
-    }
+    notify("Todas as notificações foram removidas.")
   }
   const toggleFavorite = (id: number) => {
+    const service = services.find((item) => item.id === id)
+    if (!service) return
+    const isFavorite = favorites.includes(id)
     setFavorites((current) =>
-      current.includes(id)
+      isFavorite
         ? current.filter((item) => item !== id)
         : [...current, id],
     )
-    notify(
-      favorites.includes(id)
-        ? "Serviço removido dos favoritos."
-        : "Serviço adicionado aos favoritos.",
+    const action = isFavorite ? "removido dos favoritos" : "adicionado aos favoritos"
+    addActivity(
+      isFavorite ? "Serviço removido dos favoritos" : "Serviço favoritado",
+      service.title,
+      "heart",
     )
+    notify(`${service.title} ${action}.`)
   }
   const selectService = (service: Service) => {
     setSelectedService(service)
@@ -3316,20 +3738,165 @@ export default function App() {
     setSelectedArea(area)
     navigate("area")
   }
+  const createServiceRequest = (service: Service) => {
+    const now = new Date()
+    let sequence = now.getTime() % 1_000_000
+    let code = `CD-${now.getFullYear()}-${String(sequence).padStart(6, "0")}`
+    while (protocols.some((protocol) => protocol.code === code)) {
+      sequence = (sequence + 1) % 1_000_000
+      code = `CD-${now.getFullYear()}-${String(sequence).padStart(6, "0")}`
+    }
+
+    const protocol: CitizenProtocol = {
+      code,
+      title: service.title,
+      date: now.toISOString(),
+      status: "Recebida",
+      step: 0,
+    }
+    setProtocols((current) => [protocol, ...current])
+    addActivity("Solicitação iniciada", `${service.title} · ${code}`, "file")
+    addNotification(
+      "Solicitação registrada",
+      `${service.title} recebeu o protocolo ${code}.`,
+      "Solicitações",
+      "file",
+    )
+    notify(`Solicitação registrada. Protocolo: ${code}.`)
+    setPage("dashboard")
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+  const saveAppointment = (
+    details: Omit<CitizenAppointment, "id" | "reminder">,
+  ) => {
+    const appointmentDate = new Date(`${details.date}T12:00:00`)
+    if (
+      !services.some((service) => service.title === details.service) ||
+      !appointmentUnits.includes(details.unit) ||
+      Number.isNaN(appointmentDate.getTime()) ||
+      dateInputValue(appointmentDate) !== details.date ||
+      details.date < dateInputValue(new Date()) ||
+      !appointmentTimeSlots.includes(details.time)
+    ) {
+      notify("Confira o serviço, unidade, data e horário do agendamento.")
+      return false
+    }
+
+    const alreadyBooked = appointments.some(
+      (appointment) =>
+        appointment.unit === details.unit &&
+        appointment.date === details.date &&
+        appointment.time === details.time,
+    )
+    if (alreadyBooked) {
+      notify("Esse horário já está ocupado. Escolha outro.")
+      return false
+    }
+
+    const appointment: CitizenAppointment = {
+      ...details,
+      id: `${Date.now()}-${Math.random()}`,
+      reminder: false,
+    }
+    setAppointments((current) => [...current, appointment])
+    addActivity(
+      "Agendamento criado",
+      `${details.service} · ${formatDisplayDate(details.date)} às ${details.time}`,
+      "calendar",
+    )
+    addNotification(
+      "Agendamento confirmado",
+      `${details.service} em ${formatDisplayDate(details.date)} às ${details.time}.`,
+      "Agenda",
+      "calendar",
+    )
+    notify("Agendamento salvo neste navegador.")
+    return true
+  }
+  const toggleAppointmentReminder = (id: string) => {
+    const appointment = appointments.find((item) => item.id === id)
+    if (!appointment) {
+      notify("Agendamento não encontrado.")
+      return
+    }
+    setAppointments((current) =>
+      current.map((appointment) =>
+        appointment.id === id
+          ? { ...appointment, reminder: !appointment.reminder }
+          : appointment,
+      ),
+    )
+    const reminderIsSet = !appointment.reminder
+    addActivity(
+      reminderIsSet ? "Lembrete marcado" : "Lembrete removido",
+      `${appointment.service} · ${formatDisplayDate(appointment.date)}`,
+      "calendar",
+    )
+    notify(
+      reminderIsSet
+        ? "Lembrete salvo localmente."
+        : "Lembrete removido.",
+    )
+  }
+  const cancelAppointment = (id: string) => {
+    const appointment = appointments.find((item) => item.id === id)
+    if (!appointment) {
+      notify("Agendamento não encontrado.")
+      return
+    }
+    setAppointments((current) =>
+      current.filter((item) => item.id !== id),
+    )
+    addActivity(
+      "Agendamento cancelado",
+      `${appointment.service} · ${formatDisplayDate(appointment.date)}`,
+      "calendar",
+    )
+    addNotification(
+      "Agendamento cancelado",
+      `${appointment.service} em ${formatDisplayDate(appointment.date)}.`,
+      "Agenda",
+      "calendar",
+    )
+    notify("Agendamento cancelado.")
+  }
+  const sendMessage = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const message: CitizenMessage = {
+      id: `${Date.now()}-${Math.random()}`,
+      date: new Date().toISOString(),
+      text: trimmed,
+    }
+    setMessages((current) => [...current, message])
+    addActivity("Mensagem registrada", trimmed, "message")
+    notify("Mensagem salva neste navegador; não foi enviada a um órgão.")
+  }
+  const toggleJobSaved = (title: string) => {
+    const isSaved = savedJobs.includes(title)
+    setSavedJobs((current) =>
+      isSaved ? current.filter((job) => job !== title) : [...current, title],
+    )
+    if (!isSaved) {
+      addActivity("Vaga salva", title, "briefcase")
+    }
+    notify(isSaved ? "Vaga removida das salvas." : "Vaga salva.")
+  }
   const login = () => {
     setLoggedIn(true)
-    notify(
-      pendingService
-        ? "Login realizado. Sua solicitação foi iniciada."
-        : "Login realizado com sucesso.",
-    )
+    if (pendingService) {
+      createServiceRequest(selectedService)
+    } else {
+      notify("Login demonstrativo realizado.")
+      setPage("dashboard")
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    }
     setPendingService(false)
-    navigate("dashboard")
   }
   const logout = () => {
     setLoggedIn(false)
+    setPage("login")
     notify("Você saiu da sua conta.")
-    navigate("home")
   }
   const startService = () => {
     if (!loggedIn) {
@@ -3337,26 +3904,13 @@ export default function App() {
       notify("Entre na sua conta para iniciar o serviço.")
       navigate("login")
     } else {
-      notify("Solicitação iniciada. Acompanhe pelo seu painel.")
-      navigate("dashboard")
+      createServiceRequest(selectedService)
     }
   }
 
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontScale}%`
   }, [fontScale])
-
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem(notificationsClearedStorageKey) === "true") {
-        setNotifications([])
-        setReadNotificationIds([])
-      }
-    } catch (error) {
-      console.error("Não foi possível carregar o estado das notificações.", error)
-      notify("Não foi possível recuperar a limpeza anterior das notificações.")
-    }
-  }, [])
 
   let content: ReactNode
   if (page === "home")
@@ -3404,7 +3958,7 @@ export default function App() {
     )
   else if (page === "login")
     return (
-      <>
+      <div className={reducedMotion ? "reduced-motion" : ""}>
         <LoginPage login={login} navigate={navigate} />
         {toast && (
           <div className="toast" role="status">
@@ -3412,11 +3966,11 @@ export default function App() {
             {toast}
           </div>
         )}
-      </>
+      </div>
     )
   else if (page === "recover")
     return (
-      <>
+      <div className={reducedMotion ? "reduced-motion" : ""}>
         <RecoverPage navigate={navigate} notify={notify} />
         {toast && (
           <div className="toast" role="status">
@@ -3424,7 +3978,7 @@ export default function App() {
             {toast}
           </div>
         )}
-      </>
+      </div>
     )
   else if (page === "dashboard")
     content = (
@@ -3432,12 +3986,23 @@ export default function App() {
         navigate={navigate}
         favorites={favorites}
         selectService={selectService}
-        notify={notify}
         notificationCount={unreadNotificationCount}
+        protocols={protocols}
+        appointments={appointments}
+        documents={citizenDocuments}
+        activities={activities}
       />
     )
-  else if (page === "protocols") content = <ProtocolsPage notify={notify} />
-  else if (page === "scheduling") content = <SchedulingPage notify={notify} />
+  else if (page === "protocols")
+    content = <ProtocolsPage notify={notify} protocols={protocols} />
+  else if (page === "scheduling")
+    content = (
+      <SchedulingPage
+        notify={notify}
+        appointments={appointments}
+        onConfirm={saveAppointment}
+      />
+    )
   else if (
     [
       "documents",
@@ -3464,6 +4029,15 @@ export default function App() {
         markNotificationRead={markNotificationRead}
         markAllNotificationsRead={markAllNotificationsRead}
         clearNotifications={clearNotifications}
+        documents={citizenDocuments}
+        appointments={appointments}
+        activities={activities}
+        messages={messages}
+        sendMessage={sendMessage}
+        savedJobs={savedJobs}
+        toggleJobSaved={toggleJobSaved}
+        toggleAppointmentReminder={toggleAppointmentReminder}
+        cancelAppointment={cancelAppointment}
       />
     )
   else if (page === "proposals")
@@ -3471,15 +4045,7 @@ export default function App() {
       <ProposalsPage
         navigate={navigate}
         selectProposal={(proposal) => {
-          setSelectedService({
-            id: proposal.id,
-            title: proposal.title,
-            category: proposal.category,
-            description: proposal.summary,
-            time: proposal.deadline,
-            online: true,
-            icon: proposal.icon,
-          })
+          setSelectedProposal(proposal)
           navigate("proposal")
         }}
       />
@@ -3487,33 +4053,11 @@ export default function App() {
   else if (page === "proposal")
     content = (
       <ProposalDetailPage
-        proposal={
-          "id" in selectedService
-            ? ({
-                id: selectedService.id,
-                title: selectedService.title,
-                category: selectedService.category,
-                summary: selectedService.description,
-                deadline: selectedService.time,
-                status: "Em execução",
-                amount: "R$ 0,00",
-                icon: selectedService.icon,
-              } as Proposal)
-            : ({
-                id: 0,
-                title: "Proposta",
-                category: "Atendimento",
-                summary: "Detalhes da proposta",
-                deadline: "—",
-                status: "Em execução",
-                amount: "—",
-                icon: Landmark,
-              } as Proposal)
-        }
+        proposal={selectedProposal}
         navigate={navigate}
       />
     )
-  else content = <HelpPage notify={notify} />
+  else content = <HelpPage navigate={navigate} />
 
   return (
     <div
